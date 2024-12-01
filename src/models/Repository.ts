@@ -17,6 +17,12 @@ const repositorySchema = new Schema({
     type: String,
     required: true,
   },
+  full_name: {
+    type: String,
+    default: function (this: { owner: String; name: String }) {
+      return `${this.owner}/${this.name}`;
+    },
+  },
 });
 
 export type Repository = InferSchemaType<typeof repositorySchema> & {

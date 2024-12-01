@@ -10,9 +10,8 @@ const commitSchema = new Schema({
     ref: "Repository",
     required: true,
   },
-  branch_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Branch",
+  branch: {
+    type: String,
     required: true,
   },
   created_at: {

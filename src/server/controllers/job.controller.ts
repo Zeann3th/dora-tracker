@@ -1,20 +1,25 @@
+import env from "@/env";
 import queue from "@/services/queue";
+import { Octokit } from "@octokit/rest";
 import { Job } from "bullmq";
 import { Request, RequestHandler, Response } from "express";
 
 const queueJob: RequestHandler = async (req: Request, res: Response) => {
-  const { link } = req.body;
+  const octokit = new Octokit({ auth: env.GH_PAT });
 
-  if (!link) {
-    res.status(400).json({ error: "Link is required" });
-    return;
-  }
-
-  const job = await queue.add("repo", {
-    link,
+  const repos = await octokit.paginate("GET /orgs/{org}/repos", {
+    org: env.GH_ORG_NAME,
   });
 
-  res.status(202).json({ message: "Task is being processed", jobId: job.id });
+  const jobPromises = repos.map(async (repo) => {
+    return queue.add("repo", { link: repo.full_name });
+  });
+
+  const job = await Promise.all(jobPromises);
+
+  res.status(202).json({
+    message: `Jobs are being processed, id range: [${job[0].id}; ${job[job.length - 1].id}]`,
+  });
 };
 
 const getJobStatus: RequestHandler = async (req: Request, res: Response) => {
@@ -36,7 +41,6 @@ const getJobStatus: RequestHandler = async (req: Request, res: Response) => {
     const failedReason = job.failedReason;
 
     res.status(200).json({
-      jobId: id,
       status,
       progress,
       finishedOn,

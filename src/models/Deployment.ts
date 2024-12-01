@@ -15,8 +15,8 @@ const deploymentSchema = new Schema({
     type: String,
     required: true,
   },
-  branch_id: {
-    type: mongoose.Schema.Types.ObjectId,
+  branch: {
+    type: String,
     required: true,
   },
   status: {

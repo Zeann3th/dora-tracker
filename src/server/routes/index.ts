@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { jobRoutes } from "./job.routes";
 import { repositoryRoutes } from "./repository.routes";
+import { webhookRoutes } from "./webhook.routes";
 
 const router = Router();
 
@@ -14,5 +15,7 @@ router.get("/health", (req, res) => {
 router.use("/v1/jobs", jobRoutes);
 
 router.use("/v1/repos", repositoryRoutes);
+
+router.use("/v1/webhooks", webhookRoutes);
 
 export { router as apiRoutes };

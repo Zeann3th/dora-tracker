@@ -4,7 +4,6 @@ import path from "path";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import { limiter } from "./middlewares/ratelimit";
 import { connectDB } from "@/services/mongoose";
 import { Server } from "http";
 import { apiRoutes } from "./routes";
@@ -13,6 +12,8 @@ export const startServer = async (): Promise<Server> => {
   await connectDB("server");
 
   const app = express();
+
+  app.set("trust proxy", "127.0.0.1");
 
   // Content-Type
   app.use(express.json());
@@ -28,7 +29,6 @@ export const startServer = async (): Promise<Server> => {
   // Routes
   app.use("/api", apiRoutes);
 
-  app.use(limiter);
   app.use(express.static(path.join(import.meta.dirname, "../../public")));
 
   app.get("/", (req, res) => {

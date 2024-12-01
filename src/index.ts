@@ -2,6 +2,7 @@ import "dotenv/config";
 import env from "@/env";
 import { startServer } from "./server";
 import { startWorker } from "./worker";
+import cron from "node-cron";
 import mongoose from "mongoose";
 import { Worker } from "bullmq";
 import { Server } from "http";
@@ -18,6 +19,13 @@ async function bootstrap() {
 
     console.log("\n✨ All services are up and running!\n");
 
+    // Periodic scan
+    checkup();
+
+    cron.schedule("0 0 */2 * *", () => {
+      checkup();
+    });
+
     // Set up graceful shutdown handlers
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);
@@ -26,6 +34,8 @@ async function bootstrap() {
     process.exit(1);
   }
 }
+
+async function checkup() {}
 
 async function shutdown() {
   // Gracefully shut down the Express server
