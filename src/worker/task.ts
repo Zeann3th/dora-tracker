@@ -4,12 +4,8 @@ import { TaskController } from "./controllers/task.controller";
 import { Octokit } from "@octokit/rest";
 import env from "@/env";
 
-interface WData {
-  link: string;
-  user_id: string;
-}
-
-const processRepo = async (job: Job<WData>) => {
+//TODO: there will be uat or prod (or if i read from one file, just another type of job) => need if else to separate the job types
+const processRepo = async (job: Job<{ link: string }>) => {
   console.log("processing job");
   const { link } = job.data;
 

@@ -12,7 +12,7 @@ export const startWorker = async (): Promise<Worker> => {
 
       const worker = new Worker("runtimeQueue", task.processRepo, {
         connection: { url: env.REDIS_URL },
-        removeOnFail: { count: 10 },
+        removeOnFail: { count: 5 },
         removeOnComplete: { age: 300 },
       });
 

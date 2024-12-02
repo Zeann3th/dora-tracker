@@ -11,11 +11,12 @@ const deploymentSchema = new Schema({
     ref: "Commit",
     required: true,
   },
-  name: {
+  environment: {
     type: String,
+    enum: ["dev", "uat", "prod"],
     required: true,
   },
-  branch: {
+  name: {
     type: String,
     required: true,
   },

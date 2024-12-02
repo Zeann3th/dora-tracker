@@ -6,6 +6,7 @@ import cron from "node-cron";
 import mongoose from "mongoose";
 import { Worker } from "bullmq";
 import { Server } from "http";
+import axios from "axios";
 
 let server: Server;
 let worker: Worker;
@@ -35,7 +36,18 @@ async function bootstrap() {
   }
 }
 
-async function checkup() {}
+async function checkup() {
+  try {
+    console.log("🔍 [Server]: Performing checkups...");
+
+    const response = await axios.post(
+      `http://localhost:${env.PORT}/api/v1/jobs`,
+    );
+    console.log("✅ [Server]: ", response.data.message);
+  } catch (error) {
+    console.error("❌ [Server]: Error during checkup:", error);
+  }
+}
 
 async function shutdown() {
   // Gracefully shut down the Express server

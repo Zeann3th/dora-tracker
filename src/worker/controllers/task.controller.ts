@@ -11,19 +11,19 @@ import { Octokit } from "@octokit/rest";
 const scanRepository = async (
   client: Octokit,
   owner: string,
-  repo: string,
+  name: string,
 ): Promise<Repository> => {
   let repository = await RepositoryModel.findOne({
-    name: repo,
+    name,
     owner,
   });
   if (!repository) {
     const { data } = await client.request("GET /repos/{owner}/{repo}", {
       owner,
-      repo,
+      repo: name,
     });
     repository = await RepositoryModel.create({
-      name: repo,
+      name,
       owner,
       private: data.private,
       default_branch: data.default_branch,
@@ -64,7 +64,6 @@ const scanCommits = async (
 
         cmt = await CommitModel.create({
           repo_id: repository._id,
-          branch: repository.default_branch,
           sha: commit.sha,
           commit_message,
           author,
@@ -135,15 +134,14 @@ const scanWorkflows = async (
       let deployment = await DeploymentModel.findOne({
         repo_id: repository._id,
         commit_id: commit._id,
-        branch: repository.default_branch,
         name: run.name,
       });
 
       if (!deployment) {
         deployment = await DeploymentModel.create({
           repo_id: repository._id,
-          branch: repository.default_branch,
           commit_id: commit._id,
+          environment: "dev",
           name: run.name,
           status: run.conclusion,
           started_at: run.created_at,

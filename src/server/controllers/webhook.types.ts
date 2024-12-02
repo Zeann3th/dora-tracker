@@ -11,7 +11,6 @@ export interface PullRequest {
     default_branch: string;
     owner: {
       login: string;
-      type: "Organization" | "User";
     };
   };
   pull_request: {
@@ -45,7 +44,6 @@ export interface Push {
     default_branch: string;
     owner: {
       login: string;
-      type: "Organization" | "User";
     };
   };
   organization?: {
@@ -89,6 +87,7 @@ export interface Release {
     owner: {
       login: string;
     };
+    default_branch: string;
   };
   organization?: {
     login: string;
@@ -139,7 +138,25 @@ export interface WorkflowRun {
     private: boolean;
     owner: {
       login: string;
-      id: number;
     };
+    default_branch: string;
+  };
+}
+
+export interface RepositoryWebhook {
+  action: "created" | "deleted";
+  organization?: {
+    login: string;
+    id: number;
+  };
+  repository: {
+    id: number;
+    name: string;
+    full_name: string;
+    private: boolean;
+    owner: {
+      login: string;
+    };
+    default_branch: string;
   };
 }

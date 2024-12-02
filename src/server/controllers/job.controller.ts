@@ -12,13 +12,13 @@ const queueJob: RequestHandler = async (req: Request, res: Response) => {
   });
 
   const jobPromises = repos.map(async (repo) => {
-    return queue.add("repo", { link: repo.full_name });
+    return queue.add("dev", { link: repo.full_name });
   });
 
-  const job = await Promise.all(jobPromises);
+  const jobs = await Promise.all(jobPromises);
 
   res.status(202).json({
-    message: `Jobs are being processed, id range: [${job[0].id}; ${job[job.length - 1].id}]`,
+    message: `Jobs are being processed, id range: [${jobs[0].id}; ${jobs[jobs.length - 1].id}]`,
   });
 };
 

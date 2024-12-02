@@ -1,7 +1,13 @@
 import env from "@/env";
 import crypto from "node:crypto";
 import { Request, RequestHandler, Response } from "express";
-import { PullRequest, Push, Release, WorkflowRun } from "./webhook.types";
+import {
+  PullRequest,
+  Push,
+  Release,
+  RepositoryWebhook,
+  WorkflowRun,
+} from "./webhook.types";
 import {
   Commit,
   CommitModel,
@@ -37,13 +43,44 @@ const handleGithubWebhook: RequestHandler = async (
     case "pull_request":
       await createCommit(req, res);
       break;
-    case "release":
-      break;
     case "workflow_run":
       await createWorkflowDeployment(req, res);
       break;
+    case "repository":
+      break;
     default:
       console.log("Event not included in webhook's allowed actions");
+  }
+};
+
+const handleRepository = async (req: Request, res: Response) => {
+  try {
+    const payload = req.body as RepositoryWebhook;
+    const [owner, name] = payload.repository.full_name.split("/");
+
+    switch (payload.action) {
+      case "created":
+        await RepositoryModel.create({
+          owner,
+          name,
+          private: payload.repository.private,
+          default_branch: payload.repository.default_branch,
+        });
+        break;
+      case "deleted":
+        const repository = await RepositoryModel.findOne({ owner, name });
+        if (repository) {
+          await Promise.all([
+            RepositoryModel.deleteOne({ _id: repository._id }),
+            CommitModel.deleteMany({ repo_id: repository._id }),
+            DeploymentModel.deleteMany({ repo_id: repository._id }),
+          ]);
+        }
+    }
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error });
+    return;
   }
 };
 
@@ -70,7 +107,6 @@ const createCommit = async (req: Request, res: Response) => {
 
     const commit = await CommitModel.create({
       repo_id: repository._id,
-      branch: repository.default_branch,
       sha: payload.pull_request.merge_commit_sha,
       created_at: payload.pull_request.merged_at,
       commit_message: payload.pull_request.merge_commit_message,
@@ -116,8 +152,8 @@ const createWorkflowDeployment = async (req: Request, res: Response) => {
 
     await DeploymentModel.create({
       repo_id: repository._id,
-      branch: repository.default_branch,
       commit_id: commit._id,
+      environment: "dev",
       name: payload.workflow.name,
       status: payload.workflow_run.conclusion,
       started_at: payload.workflow_run.created_at,
@@ -170,6 +206,11 @@ const verifyWebhookSignature = (signature: string, payload: any) => {
   );
 };
 
-const WebhookController = { handleGithubWebhook };
+const handleGoogleWebhook: RequestHandler = async (
+  req: Request,
+  res: Response,
+) => {};
+
+const WebhookController = { handleGithubWebhook, handleGoogleWebhook };
 
 export default WebhookController;
