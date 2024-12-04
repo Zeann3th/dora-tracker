@@ -166,5 +166,6 @@ export interface GoogleDocsUpdate {
   version: string;
   timestamp: string;
   environment: "dev" | "uat" | "prod";
-  content: Array<string>;
+  content: string;
+  target: Array<string>;
 }

@@ -229,20 +229,10 @@ const handleGoogleWebhook: RequestHandler = async (
     const payload = req.body as GoogleDocsUpdate;
     console.log(payload);
 
-    const versionIdx = payload.content.findIndex((line) =>
-      line.includes("Version"),
-    );
-
-    if (versionIdx === -1) {
-      res.status(400).json({ error: "No version line found" });
-      return;
-    }
-
-    const releases = payload.content.slice(versionIdx + 1);
     const releaseRegex =
       /github\.com\/([^/]+)\/([^/]+)\/releases\/tag\/([^/]+)/;
 
-    const versionPromises = releases.map(async (release) => {
+    const versionPromises = payload.target.map(async (release) => {
       try {
         const match = release.match(releaseRegex);
         if (!match) {
@@ -253,55 +243,79 @@ const handleGoogleWebhook: RequestHandler = async (
         const [owner, repo, tagName] = match.slice(1);
         const repository = await findRepository(owner, repo);
 
+        // Fetch the latest 5 tags
         const tags = await octokit.paginate("GET /repos/{owner}/{repo}/tags", {
           owner,
           repo,
-          per_page: 5,
+          per_page: 2,
         });
 
-        const currTagIdx = tags.findIndex((tag) => tag.name === tagName);
-        const currTag = tags[currTagIdx];
-        const prevTag = tags[currTagIdx + 1];
+        const currTag = tags[0];
+        const prevTag = tags.length > 1 ? tags[1] : undefined;
 
-        if (!currTag || !prevTag) {
-          console.warn(`Missing tags for ${repo}. Skipping comparison.`);
+        if (!currTag) {
+          console.warn(`Current tag not found for ${repo}.`);
           return;
         }
 
-        const {
-          data: { commits },
-        } = await octokit.request(
-          "GET /repos/{owner}/{repo}/compare/{base}...{head}",
-          {
-            owner,
-            repo,
-            base: prevTag.commit.sha,
-            head: currTag.commit.sha,
-          },
-        );
-
-        const commitPromises = commits.map(async (commit) => {
-          try {
-            const cmt = await CommitModel.findOne({ sha: { $eq: commit.sha } });
-            if (!cmt) {
-              console.warn(`Commit not found: ${commit.sha}`);
-              return;
-            }
-            await DeploymentModel.create({
-              repo_id: repository._id,
-              commit_id: cmt._id,
-              environment: payload.environment,
-              name: `UAT release for ${commit.sha}`,
-              status: "success",
-              started_at: cmt.created_at,
-              finished_at: payload.timestamp,
-            });
-          } catch (err) {
-            console.error(`Error processing commit ${commit.sha}:`, err);
+        if (!prevTag) {
+          // Create deployment only for the head commit (currTag)
+          const cmt = await CommitModel.findOne({
+            sha: { $eq: currTag.commit.sha },
+          });
+          if (!cmt) {
+            console.warn(`Commit not found: ${currTag.commit.sha}`);
+            return;
           }
-        });
+          await DeploymentModel.create({
+            repo_id: repository._id,
+            commit_id: cmt._id,
+            environment: payload.environment,
+            name: `UAT release for ${currTag.commit.sha}`,
+            status: "success",
+            started_at: cmt.created_at,
+            finished_at: payload.timestamp,
+          });
+        } else {
+          // Compare currTag and prevTag commits
+          const {
+            data: { commits },
+          } = await octokit.request(
+            "GET /repos/{owner}/{repo}/compare/{base}...{head}",
+            {
+              owner,
+              repo,
+              base: prevTag.commit.sha,
+              head: currTag.commit.sha,
+            },
+          );
 
-        await Promise.all(commitPromises);
+          // Process each commit in the comparison
+          const commitPromises = commits.map(async (commit) => {
+            try {
+              const cmt = await CommitModel.findOne({
+                sha: { $eq: commit.sha },
+              });
+              if (!cmt) {
+                console.warn(`Commit not found: ${commit.sha}`);
+                return;
+              }
+              await DeploymentModel.create({
+                repo_id: repository._id,
+                commit_id: cmt._id,
+                environment: payload.environment,
+                name: `${payload.environment.toUpperCase()} release for ${commit.sha}`,
+                status: "success",
+                started_at: cmt.created_at,
+                finished_at: payload.timestamp,
+              });
+            } catch (err) {
+              console.error(`Error processing commit ${commit.sha}:`, err);
+            }
+          });
+
+          await Promise.all(commitPromises);
+        }
       } catch (err) {
         console.error(`Error processing release: %s`, release, err);
       }
