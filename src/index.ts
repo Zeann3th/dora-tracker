@@ -23,7 +23,7 @@ async function bootstrap() {
     // Periodic scan
     checkup();
 
-    cron.schedule("0 0 0 */2 *", () => {
+    cron.schedule("0 0 */2 * *", () => {
       checkup();
     });
 
