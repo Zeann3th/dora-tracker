@@ -238,7 +238,7 @@ const handleGoogleWebhook: RequestHandler = async (
       return;
     }
 
-    const releases = payload.content.slice(versionIdx);
+    const releases = payload.content.slice(versionIdx + 1);
     const releaseRegex =
       /github\.com\/([^/]+)\/([^/]+)\/releases\/tag\/([^/]+)/;
 
