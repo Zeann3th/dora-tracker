@@ -289,8 +289,8 @@ const handleGoogleWebhook: RequestHandler = async (
             }
             await DeploymentModel.create({
               repo_id: repository._id,
-              commit_id: commit.sha,
-              environment: "uat",
+              commit_id: cmt._id,
+              environment: payload.environment,
               name: `UAT release for ${commit.sha}`,
               status: "success",
               started_at: cmt.created_at,
