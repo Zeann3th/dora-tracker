@@ -11,12 +11,13 @@ const deploymentSchema = new Schema({
     ref: "Commit",
     required: true,
   },
-  name: {
+  environment: {
     type: String,
+    enum: ["dev", "uat", "prod"],
     required: true,
   },
-  branch_id: {
-    type: mongoose.Schema.Types.ObjectId,
+  name: {
+    type: String,
     required: true,
   },
   status: {

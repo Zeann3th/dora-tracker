@@ -1,26 +1,19 @@
-import { Repository, Branch } from "@/models";
+import { Repository } from "@/models";
 import { Job } from "bullmq";
 import { TaskController } from "./controllers/task.controller";
 import { Octokit } from "@octokit/rest";
 import env from "@/env";
+import octokit from "@/services/octokit";
 
-interface WData {
-  link: string;
-  user_id: string;
-}
-
-const processRepo = async (job: Job<WData>) => {
+//TODO: there will be uat or prod (or if i read from one file, just another type of job) => need if else to separate the job types
+const processRepo = async (job: Job<{ link: string }>) => {
   console.log("processing job");
   const { link } = job.data;
-
-  const octokit = new Octokit({
-    auth: env.GH_PAT,
-  });
 
   console.log("Scanning for repository...");
   // Extract owner and repository name from link
   // e.g: https://github.com/mui/material-ui => owner: mui, repo: material-ui
-  const [owner, repo] = TaskController.scanUserInput(link);
+  const [owner, repo] = link.split("/");
 
   // Checks for repository on database, if doesn't exist, create a new repository document
   const repository: Repository = await TaskController.scanRepository(
@@ -29,25 +22,16 @@ const processRepo = async (job: Job<WData>) => {
     repo,
   );
 
-  console.log(
-    `Scanning for default branch in ${repository.owner}/${repository.name}...`,
-  );
-  const branch = await TaskController.scanDefaultBranch(repository);
-
-  console.log(
-    `Scanning commits from ${branch.name} - ${repository.owner}/${repository.name}...`,
-  );
-  const commits = await TaskController.scanCommits(octokit, repository, branch);
+  console.log(`Scanning commits from ${repository.full_name}...`);
+  const commits = await TaskController.scanCommits(octokit, repository);
 
   await job.updateProgress(50);
 
-  console.log(
-    `Scanning deployments from ${repository.owner}/${repository.name}`,
-  );
+  console.log(`Scanning deployments from ${repository.full_name}`);
   await Promise.all([
-    TaskController.scanWorkflows(octokit, repository, branch, commits),
-    TaskController.scanReleases(octokit, repository, branch, commits),
-    //TaskController.scanDeploymentsFromGoogleDocs(octokit, repository, prod),
+    TaskController.scanWorkflows(octokit, repository, commits, {
+      filter: "Docker",
+    }),
   ]);
 
   await job.updateProgress(100);

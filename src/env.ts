@@ -10,6 +10,10 @@ const schema = z.object({
     .url("Expected MONGO_URI to be url"),
   MONGO_DB_NAME: z.string({ required_error: "MONGO_DB_NAME is required" }),
   GH_PAT: z.string({ required_error: "GH_PAT is required" }),
+  GH_ORG_NAME: z.string({ required_error: "GH_ORG_NAME is required" }),
+  GH_WEBHOOK_SECRET: z.string({
+    required_error: "GH_WEBHOOK_SECRET is required",
+  }),
   REDIS_URL: z.string({ required_error: "REDIS_URL is required" }),
 });
 

@@ -1,6 +1,4 @@
 import {
-  Branch,
-  BranchModel,
   Commit,
   CommitModel,
   Deployment,
@@ -13,19 +11,19 @@ import { Octokit } from "@octokit/rest";
 const scanRepository = async (
   client: Octokit,
   owner: string,
-  repo: string,
+  name: string,
 ): Promise<Repository> => {
   let repository = await RepositoryModel.findOne({
-    name: repo,
+    name,
     owner,
   });
   if (!repository) {
     const { data } = await client.request("GET /repos/{owner}/{repo}", {
       owner,
-      repo,
+      repo: name,
     });
     repository = await RepositoryModel.create({
-      name: repo,
+      name,
       owner,
       private: data.private,
       default_branch: data.default_branch,
@@ -34,31 +32,14 @@ const scanRepository = async (
   return repository;
 };
 
-const scanDefaultBranch = async (repository: Repository): Promise<Branch> => {
-  let branch = await BranchModel.findOne({
-    name: repository.default_branch,
-    repo_id: repository._id,
-  });
-
-  if (!branch) {
-    branch = await BranchModel.create({
-      repo_id: repository._id,
-      name: repository.default_branch,
-    });
-  }
-
-  return branch;
-};
-
 const scanCommits = async (
   client: Octokit,
   repository: Repository,
-  branch: Branch,
 ): Promise<Commit[]> => {
   const commits = await client.paginate("GET /repos/{owner}/{repo}/commits", {
     owner: repository.owner,
     repo: repository.name,
-    sha: branch.name,
+    sha: repository.default_branch,
   });
 
   const commitPromises = commits.map(async (commit) => {
@@ -66,7 +47,6 @@ const scanCommits = async (
       // Check if commit exists
       let cmt = await CommitModel.findOne({
         repo_id: repository._id,
-        branch_id: branch._id,
         sha: commit.sha,
       }).then();
       // If not exist, create new
@@ -84,7 +64,6 @@ const scanCommits = async (
 
         cmt = await CommitModel.create({
           repo_id: repository._id,
-          branch_id: branch._id,
           sha: commit.sha,
           commit_message,
           author,
@@ -106,7 +85,6 @@ const scanCommits = async (
 const scanWorkflows = async (
   client: Octokit,
   repository: Repository,
-  branch: Branch,
   commits: Commit[],
   opts: {
     filter?: string;
@@ -123,7 +101,7 @@ const scanWorkflows = async (
     runs = await client.paginate("GET /repos/{owner}/{repo}/actions/runs", {
       owner: repository.owner,
       repo: repository.name,
-      branch: branch.name,
+      branch: repository.default_branch,
     });
   } catch (error) {
     console.error("[Worker]: Error fetching workflow runs", error);
@@ -155,7 +133,6 @@ const scanWorkflows = async (
     try {
       let deployment = await DeploymentModel.findOne({
         repo_id: repository._id,
-        branch_id: branch._id,
         commit_id: commit._id,
         name: run.name,
       });
@@ -163,8 +140,8 @@ const scanWorkflows = async (
       if (!deployment) {
         deployment = await DeploymentModel.create({
           repo_id: repository._id,
-          branch_id: branch._id,
           commit_id: commit._id,
+          environment: "dev",
           name: run.name,
           status: run.conclusion,
           started_at: run.created_at,
@@ -193,171 +170,24 @@ const scanWorkflows = async (
 const scanReleases = async (
   client: Octokit,
   repository: Repository,
-  branch: Branch,
   commits: Commit[],
   opts: {
     return?: boolean;
   } = {},
 ): Promise<Deployment[] | void> => {
-  if (!commits?.length) {
-    console.log("No commits provided");
-    return opts.return ? [] : undefined;
-  }
-
-  let tags, releases;
-  try {
-    [tags, releases] = await Promise.all([
-      client.paginate("GET /repos/{owner}/{repo}/tags", {
-        owner: repository.owner,
-        repo: repository.name,
-      }),
-      client.paginate("GET /repos/{owner}/{repo}/releases", {
-        owner: repository.owner,
-        repo: repository.name,
-      }),
-    ]);
-  } catch (error) {
-    console.error("[Worker]: Error fetching tags or releases", error);
-    return opts.return ? [] : undefined;
-  }
-
-  if (!tags?.length || !releases?.length) {
-    console.log("No tags or releases found");
-    return opts.return ? [] : undefined;
-  }
-
-  const commitMap = new Map(commits.map((commit) => [commit.sha, commit]));
-  const commitStatusMap = new Map(commits.map((commit) => [commit.sha, false]));
-  const tagsByName = new Map(tags.map((tag) => [tag.name, tag]));
-
-  const deploymentPromises = releases.map(async (release) => {
-    try {
-      const matchingTag = tagsByName.get(release.tag_name);
-      if (!matchingTag) return null;
-
-      const matchingCommit = commitMap.get(matchingTag.commit.sha);
-      if (!matchingCommit) return null;
-
-      commitStatusMap.set(matchingCommit.sha, true);
-
-      const deployment = await DeploymentModel.create({
-        repo_id: repository._id,
-        commit_id: matchingCommit._id,
-        name: release.name || matchingTag.name,
-        status: "success",
-        branch_id: branch._id,
-        started_at: matchingCommit.created_at,
-        finished_at: release.published_at,
-      });
-
-      return deployment;
-    } catch (error) {
-      console.log(
-        `[Worker]: Error creating deployment for release ${release.name}:`,
-        error,
-      );
-      return null;
-    }
-  });
-
-  // Await all deployments
-  const processedDeployments = (await Promise.all(deploymentPromises)).filter(
-    (deployment) => deployment !== null,
-  );
-
-  // Handle edge cases
-  const finalDeployments = handleDeploymentEdgeCases(
-    processedDeployments,
-    commitMap,
-    commitStatusMap,
-  );
-
-  return opts.return ? finalDeployments : undefined;
+  console.log("TO BE IMPLEMENTED");
 };
 
 const scanDeploymentsFromGoogleDocs = async (
   client: Octokit,
   repository: Repository,
-  branch: Branch,
   commits: Commit[],
 ): Promise<void> => {
   console.log("TO BE IMPLEMENTED");
 };
 
-const handleDeploymentEdgeCases = async (
-  deployments: Deployment[],
-  commitMap: Map<string, Commit>,
-  commitStatusMap: Map<string, boolean>,
-): Promise<Deployment[]> => {
-  // Sort existing deployments
-  deployments.sort((a, b) => a.started_at.getTime() - b.started_at.getTime());
-
-  const deploymentPromises: Promise<Deployment>[] = [];
-
-  for (const [sha, used] of commitStatusMap.entries()) {
-    if (!used) {
-      const commit = commitMap.get(sha);
-      if (!commit) continue;
-
-      // Skip commits created after the last deployment
-      if (
-        deployments.length > 0 &&
-        commit.created_at.getTime() >
-          deployments[deployments.length - 1].started_at.getTime()
-      ) {
-        continue;
-      }
-
-      let targetIdx = deployments.length;
-      for (let i = 0; i < deployments.length; i++) {
-        if (commit.created_at.getTime() < deployments[i].started_at.getTime()) {
-          targetIdx = i;
-          break;
-        }
-      }
-
-      // Ensure targetIdx is within bounds before accessing deployments[targetIdx]
-      if (targetIdx < deployments.length) {
-        const targetDeployment = deployments[targetIdx];
-
-        const newDeployment = DeploymentModel.create({
-          repo_id: targetDeployment.repo_id,
-          branch_id: targetDeployment.branch_id,
-          commit_id: commit._id,
-          name: targetDeployment.name,
-          status: targetDeployment.status,
-          started_at: commit.created_at,
-          finished_at: targetDeployment.finished_at,
-        });
-
-        deploymentPromises.push(newDeployment);
-      } else {
-        console.log(
-          `Skipping commit with sha ${sha}, no matching deployment found.`,
-        );
-      }
-    }
-  }
-
-  const additionalDeployments = await Promise.all(deploymentPromises);
-  const allDeployments = [...deployments, ...additionalDeployments].sort(
-    (a, b) => a.started_at.getTime() - b.started_at.getTime(),
-  );
-
-  return allDeployments;
-};
-
-const scanUserInput = (link: string): [string, string] => {
-  const parts = link.split("/");
-  const owner = parts[parts.length - 2];
-  const repo = parts[parts.length - 1];
-  return [owner, repo];
-};
-
 const TaskController = {
-  scanUserInput,
   scanRepository,
-  scanDefaultBranch,
   scanCommits,
   scanWorkflows,
   scanReleases,
