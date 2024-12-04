@@ -161,7 +161,7 @@ export interface GHRepository {
   };
 }
 
-export interface GoogleDocs {
+export interface GoogleDocsUpdate {
   docId: string;
   version: string;
   timestamp: string;

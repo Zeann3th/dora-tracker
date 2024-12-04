@@ -2,7 +2,7 @@ import env from "@/env";
 import crypto from "node:crypto";
 import { Request, RequestHandler, Response } from "express";
 import {
-  GoogleDocs,
+  GoogleDocsUpdate,
   PullRequest,
   Push,
   Release,
@@ -71,12 +71,15 @@ const handleRepository = async (req: Request, res: Response) => {
         });
         break;
       case "deleted":
-        const repository = await RepositoryModel.findOne({ owner, name });
+        const repository = await RepositoryModel.findOne({
+          owner: { $eq: owner },
+          name: { $eq: name },
+        });
         if (repository) {
           await Promise.all([
-            RepositoryModel.deleteOne({ _id: repository._id }),
-            CommitModel.deleteMany({ repo_id: repository._id }),
-            DeploymentModel.deleteMany({ repo_id: repository._id }),
+            RepositoryModel.deleteOne({ _id: { $eq: repository._id } }),
+            CommitModel.deleteMany({ repo_id: { $eq: repository._id } }),
+            DeploymentModel.deleteMany({ repo_id: { $eq: repository._id } }),
           ]);
         }
     }
@@ -176,7 +179,10 @@ const findRepository = async (
   owner: string,
   repo: string,
 ): Promise<Repository> => {
-  const repository = await RepositoryModel.findOne({ owner, name: repo });
+  const repository = await RepositoryModel.findOne({
+    owner: { $eq: owner },
+    name: { $eq: repo },
+  });
   if (!repository) {
     throw new Error(`Repository ${owner}/${repo} does not exist`);
   }
@@ -187,10 +193,19 @@ const findCommit = async (
   repository: Repository,
   sha: string,
 ): Promise<Commit> => {
-  const commit = await CommitModel.findOne({ repo_id: repository._id, sha });
+  if (!/^[a-f0-9]{40}$/.test(sha)) {
+    throw new Error(`Invalid commit SHA: ${sha}`);
+  }
+
+  const commit = await CommitModel.findOne({
+    repo_id: { $eq: repository._id },
+    sha: { $eq: sha },
+  });
+
   if (!commit) {
     throw new Error(`Commit ${sha} does not exist in ${repository.full_name}`);
   }
+
   return commit;
 };
 
@@ -211,7 +226,7 @@ const handleGoogleWebhook: RequestHandler = async (
   res: Response,
 ) => {
   try {
-    const payload = req.body as GoogleDocs;
+    const payload = req.body as GoogleDocsUpdate;
     console.log(payload);
 
     const versionIdx = payload.content.findIndex((line) =>
@@ -241,7 +256,7 @@ const handleGoogleWebhook: RequestHandler = async (
         const tags = await octokit.paginate("GET /repos/{owner}/{repo}/tags", {
           owner,
           repo,
-          per_page: 10,
+          per_page: 5,
         });
 
         const currTagIdx = tags.findIndex((tag) => tag.name === tagName);
@@ -267,7 +282,7 @@ const handleGoogleWebhook: RequestHandler = async (
 
         const commitPromises = commits.map(async (commit) => {
           try {
-            const cmt = await CommitModel.findOne({ sha: commit.sha });
+            const cmt = await CommitModel.findOne({ sha: { $eq: commit.sha } });
             if (!cmt) {
               console.warn(`Commit not found: ${commit.sha}`);
               return;
@@ -288,7 +303,7 @@ const handleGoogleWebhook: RequestHandler = async (
 
         await Promise.all(commitPromises);
       } catch (err) {
-        console.error(`Error processing release: ${release}`, err);
+        console.error(`Error processing release: %s`, release, err);
       }
     });
 

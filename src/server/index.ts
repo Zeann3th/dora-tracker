@@ -6,6 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { connectDB } from "@/services/mongoose";
 import { Server } from "http";
+import { limiter } from "./middlewares/ratelimit";
 import { apiRoutes } from "./routes";
 
 export const startServer = async (): Promise<Server> => {
@@ -27,7 +28,7 @@ export const startServer = async (): Promise<Server> => {
   app.use(morgan(":method :url :status - :response-time ms"));
 
   // Routes
-  app.use("/api", apiRoutes);
+  app.use("/api", limiter, apiRoutes);
 
   app.use(express.static(path.join(import.meta.dirname, "../../public")));
 
