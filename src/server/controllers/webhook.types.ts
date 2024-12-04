@@ -143,7 +143,7 @@ export interface WorkflowRun {
   };
 }
 
-export interface RepositoryWebhook {
+export interface GHRepository {
   action: "created" | "deleted";
   organization?: {
     login: string;
@@ -159,4 +159,11 @@ export interface RepositoryWebhook {
     };
     default_branch: string;
   };
+}
+
+export interface GoogleDocs {
+  docId: string;
+  version: string;
+  timestamp: string;
+  content: Array<string>;
 }

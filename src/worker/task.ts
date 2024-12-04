@@ -3,15 +3,12 @@ import { Job } from "bullmq";
 import { TaskController } from "./controllers/task.controller";
 import { Octokit } from "@octokit/rest";
 import env from "@/env";
+import octokit from "@/services/octokit";
 
 //TODO: there will be uat or prod (or if i read from one file, just another type of job) => need if else to separate the job types
 const processRepo = async (job: Job<{ link: string }>) => {
   console.log("processing job");
   const { link } = job.data;
-
-  const octokit = new Octokit({
-    auth: env.GH_PAT,
-  });
 
   console.log("Scanning for repository...");
   // Extract owner and repository name from link

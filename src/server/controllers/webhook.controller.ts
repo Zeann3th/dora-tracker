@@ -2,10 +2,11 @@ import env from "@/env";
 import crypto from "node:crypto";
 import { Request, RequestHandler, Response } from "express";
 import {
+  GoogleDocs,
   PullRequest,
   Push,
   Release,
-  RepositoryWebhook,
+  GHRepository,
   WorkflowRun,
 } from "./webhook.types";
 import {
@@ -15,6 +16,7 @@ import {
   Repository,
   RepositoryModel,
 } from "@/models";
+import octokit from "@/services/octokit";
 
 const handleGithubWebhook: RequestHandler = async (
   req: Request,
@@ -47,6 +49,7 @@ const handleGithubWebhook: RequestHandler = async (
       await createWorkflowDeployment(req, res);
       break;
     case "repository":
+      await handleRepository(req, res);
       break;
     default:
       console.log("Event not included in webhook's allowed actions");
@@ -55,7 +58,7 @@ const handleGithubWebhook: RequestHandler = async (
 
 const handleRepository = async (req: Request, res: Response) => {
   try {
-    const payload = req.body as RepositoryWebhook;
+    const payload = req.body as GHRepository;
     const [owner, name] = payload.repository.full_name.split("/");
 
     switch (payload.action) {
@@ -80,7 +83,6 @@ const handleRepository = async (req: Request, res: Response) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ error: error });
-    return;
   }
 };
 
@@ -163,12 +165,10 @@ const createWorkflowDeployment = async (req: Request, res: Response) => {
     res.status(200).json({
       message: `[Webhook]: Deployment of commit ${commit._id} in dev environment is added to repository ${repository.full_name}`,
     });
-    return;
   } catch (error) {
     console.error("[Webhook]: Error - ", error);
 
     res.status(500).json({ error: "Internal Server Error" });
-    return;
   }
 };
 
@@ -209,7 +209,96 @@ const verifyWebhookSignature = (signature: string, payload: any) => {
 const handleGoogleWebhook: RequestHandler = async (
   req: Request,
   res: Response,
-) => {};
+) => {
+  try {
+    const payload = req.body as GoogleDocs;
+    console.log(payload);
+
+    const versionIdx = payload.content.findIndex((line) =>
+      line.includes("Version"),
+    );
+
+    if (versionIdx === -1) {
+      res.status(400).json({ error: "No version line found" });
+      return;
+    }
+
+    const releases = payload.content.slice(versionIdx);
+    const releaseRegex =
+      /github\.com\/([^/]+)\/([^/]+)\/releases\/tag\/([^/]+)/;
+
+    const versionPromises = releases.map(async (release) => {
+      try {
+        const match = release.match(releaseRegex);
+        if (!match) {
+          console.warn(`No match for release: ${release}`);
+          return;
+        }
+
+        const [owner, repo, tagName] = match.slice(1);
+        const repository = await findRepository(owner, repo);
+
+        const tags = await octokit.paginate("GET /repos/{owner}/{repo}/tags", {
+          owner,
+          repo,
+          per_page: 10,
+        });
+
+        const currTagIdx = tags.findIndex((tag) => tag.name === tagName);
+        const currTag = tags[currTagIdx];
+        const prevTag = tags[currTagIdx + 1];
+
+        if (!currTag || !prevTag) {
+          console.warn(`Missing tags for ${repo}. Skipping comparison.`);
+          return;
+        }
+
+        const {
+          data: { commits },
+        } = await octokit.request(
+          "GET /repos/{owner}/{repo}/compare/{base}...{head}",
+          {
+            owner,
+            repo,
+            base: prevTag.commit.sha,
+            head: currTag.commit.sha,
+          },
+        );
+
+        const commitPromises = commits.map(async (commit) => {
+          try {
+            const cmt = await CommitModel.findOne({ sha: commit.sha });
+            if (!cmt) {
+              console.warn(`Commit not found: ${commit.sha}`);
+              return;
+            }
+            await DeploymentModel.create({
+              repo_id: repository._id,
+              commit_id: commit.sha,
+              environment: "uat",
+              name: `UAT release for ${commit.sha}`,
+              status: "success",
+              started_at: cmt.created_at,
+              finished_at: payload.timestamp,
+            });
+          } catch (err) {
+            console.error(`Error processing commit ${commit.sha}:`, err);
+          }
+        });
+
+        await Promise.all(commitPromises);
+      } catch (err) {
+        console.error(`Error processing release: ${release}`, err);
+      }
+    });
+
+    await Promise.all(versionPromises);
+    res.status(200).json({ message: "Webhook processed successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 const WebhookController = { handleGithubWebhook, handleGoogleWebhook };
 

@@ -23,7 +23,7 @@ async function bootstrap() {
     // Periodic scan
     checkup();
 
-    cron.schedule("0 0 */2 * *", () => {
+    cron.schedule("0 0 0 */2 *", () => {
       checkup();
     });
 
@@ -38,7 +38,7 @@ async function bootstrap() {
 
 async function checkup() {
   try {
-    console.log("🔍 [Server]: Performing checkups...");
+    console.log("🔍 [Server]: Performing periodic scans...");
 
     const response = await axios.post(
       `http://localhost:${env.PORT}/api/v1/jobs`,
