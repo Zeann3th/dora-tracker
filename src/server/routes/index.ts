@@ -17,7 +17,7 @@ router.use("/v1/jobs", jobRoutes);
 router.use("/v1/webhooks", webhookRoutes);
 
 router.get("/docs", (req, res) => {
-  return res.redirect(env.API_DOC);
+  return res.redirect(env.API_DOC!);
 });
 
 export { router as apiRoutes };
