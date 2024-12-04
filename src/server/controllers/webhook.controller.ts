@@ -53,12 +53,6 @@ const handleGithubWebhook: RequestHandler = async (
       break;
     default:
       console.log("Event not included in webhook's allowed actions");
-      res
-        .status(200)
-        .json({
-          message:
-            "Webhook received, but event is not included in webhook's allowed actions",
-        });
   }
 };
 
@@ -151,11 +145,7 @@ const createWorkflowDeployment = async (req: Request, res: Response) => {
     const isDefaultBranch =
       payload.workflow_run.head_branch === repository.default_branch;
 
-    if (
-      payload.action !== "completed" ||
-      !isDefaultBranch ||
-      !payload.workflow.name.toLowerCase().includes("docker")
-    ) {
+    if (payload.action !== "completed" || !isDefaultBranch) {
       res.status(204).send();
       return;
     }
