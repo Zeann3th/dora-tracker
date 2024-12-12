@@ -15,7 +15,8 @@ const schema = z.object({
     required_error: "GH_WEBHOOK_SECRET is required",
   }),
   REDIS_URL: z.string({ required_error: "REDIS_URL is required" }),
-  API_DOC: z.string().url("Expected API_DOC to be url").optional(),
+  UAT_DOC_ID: z.string({ required_error: "UAT_DOC_ID is required" }),
+  PROD_DOC_ID: z.string({ required_error: "PROD_DOC_ID is required" }),
 });
 
 export type Env = z.infer<typeof schema>;

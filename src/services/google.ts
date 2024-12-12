@@ -16,7 +16,7 @@ class GoogleAPIClient {
     try {
       const docs = google.docs({ version: "v1", auth: this.auth });
       const content = await docs.documents.get({ documentId });
-      return this.extractTextByLine(content.data.body?.content);
+      return this.extractTextByBlock(content.data.body?.content);
     } catch (error) {
       console.error("Error reading document:", error);
       return undefined;
@@ -47,6 +47,39 @@ class GoogleAPIClient {
     });
 
     return lines;
+  }
+
+  private extractTextByBlock(
+    content: docs_v1.Schema$StructuralElement[] | undefined,
+  ): string[] {
+    const blocks: string[] = [];
+
+    if (!content) {
+      return [];
+    }
+
+    let currentBlock = "";
+    content.forEach((element) => {
+      if (element.paragraph && element.paragraph.elements) {
+        element.paragraph.elements.forEach((paragraphElement) => {
+          if (paragraphElement.textRun && paragraphElement.textRun.content) {
+            currentBlock += paragraphElement.textRun.content;
+          }
+        });
+      }
+
+      if (/\n{2,}/.test(currentBlock)) {
+        const [block, remaining] = currentBlock.split(/\n{2,}/, 2);
+        blocks.push(block.trim());
+        currentBlock = remaining || "";
+      }
+    });
+
+    if (currentBlock.trim()) {
+      blocks.push(currentBlock.trim());
+    }
+
+    return blocks;
   }
 }
 
