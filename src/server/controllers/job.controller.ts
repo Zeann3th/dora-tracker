@@ -11,11 +11,13 @@ const queueJob: RequestHandler = async (req: Request, res: Response) => {
     org: env.GH_ORG_NAME,
   });
 
-  const jobPromises = repos.map(async (repo) => {
-    return queue.add("dev", { link: repo.full_name });
+  const devPromises = repos.map(async (repo) => {
+    return queue.add("dev", { repo_ref: repo.full_name });
   });
 
-  const jobs = await Promise.all(jobPromises);
+  const prodPromises = queue.add("prod", {});
+
+  const jobs = await Promise.all([...devPromises, prodPromises]);
 
   res.status(202).json({
     message: `Jobs are being processed, id range: [${jobs[0].id}; ${jobs[jobs.length - 1].id}]`,

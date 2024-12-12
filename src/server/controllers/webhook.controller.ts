@@ -53,12 +53,10 @@ const handleGithubWebhook: RequestHandler = async (
       break;
     default:
       console.log("Event not included in webhook's allowed actions");
-      res
-        .status(200)
-        .json({
-          message:
-            "Webhook received, but event is not included in webhook's allowed actions",
-        });
+      res.status(200).json({
+        message:
+          "Webhook received, but event is not included in webhook's allowed actions",
+      });
   }
 };
 
@@ -281,7 +279,7 @@ const handleGoogleWebhook: RequestHandler = async (
             repo_id: repository._id,
             commit_id: cmt._id,
             environment: payload.environment,
-            name: `UAT release for ${currTag.commit.sha}`,
+            name: `${payload.environment.toUpperCase()}/${payload.version} release for ${currTag.commit.sha}`,
             status: "success",
             started_at: cmt.created_at,
             finished_at: payload.timestamp,
@@ -314,7 +312,7 @@ const handleGoogleWebhook: RequestHandler = async (
                 repo_id: repository._id,
                 commit_id: cmt._id,
                 environment: payload.environment,
-                name: `${payload.environment.toUpperCase()} release for ${commit.sha}`,
+                name: `${payload.environment.toUpperCase()}/${payload.version} release for ${commit.sha}`,
                 status: "success",
                 started_at: cmt.created_at,
                 finished_at: payload.timestamp,
