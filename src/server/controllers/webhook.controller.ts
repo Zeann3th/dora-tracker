@@ -121,7 +121,7 @@ const createCommit = async (req: Request, res: Response) => {
       commit_message:
         payload.pull_request.merge_commit_message ||
         payload.pull_request.merge_commit_title,
-      author: payload.pull_request.merged_by.name,
+      author: payload.pull_request.merged_by.login,
     });
 
     res.status(200).json({
