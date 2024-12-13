@@ -29,6 +29,7 @@ export interface PullRequest {
     merged_by: {
       name: string;
       email: string;
+      login: string;
     };
     merge_commit_message: string;
     merge_commit_title: string;
