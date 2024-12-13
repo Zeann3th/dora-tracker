@@ -52,7 +52,7 @@ const handleGithubWebhook: RequestHandler = async (
       await handleRepository(req, res);
       break;
     default:
-      console.log("Event not included in webhook's allowed actions");
+      console.log("Event not included in webhook's allowed actions: ", event);
       res.status(200).json({
         message:
           "Webhook received, but event is not included in webhook's allowed actions",

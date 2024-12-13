@@ -1,4 +1,3 @@
-import env from "@/env";
 import {
   Commit,
   CommitModel,
@@ -171,23 +170,135 @@ const scanWorkflows = async (
   }
 };
 
-const scanReleases = async (
+const scanReleasesFromDocs = async (
   client: Octokit,
   repository: Repository,
-  commits: Commit[],
-  opts: {
-    return?: boolean;
-  } = {},
-): Promise<Deployment[] | void> => {
-  console.log("TO BE IMPLEMENTED");
+  release: {
+    tagName: string;
+    timestamp: string;
+    deploymentVersion: string;
+  },
+) => {
+  const tags = await client.paginate("GET /repos/{owner}/{repo}/tags", {
+    owner: repository.owner,
+    repo: repository.name,
+  });
+
+  const currTagIdx = tags.findIndex((tag) => tag.name === release.tagName);
+
+  if (currTagIdx === -1) {
+    console.warn(
+      `Current tag (${release.tagName}) not found for ${repository.full_name}.`,
+    );
+    return;
+  }
+
+  const currTag = tags[currTagIdx];
+  const prevTag = tags[currTagIdx + 1];
+
+  if (!prevTag) {
+    const commit = await CommitModel.findOne({
+      sha: currTag.commit.sha,
+    });
+    if (!commit) {
+      console.warn(`Commit not found: ${currTag.commit.sha}`);
+      return;
+    }
+
+    const deployment = await DeploymentModel.findOne({
+      repo_id: repository._id,
+      commit_id: commit._id,
+      environment: "prod",
+      name: `PROD/${release.deploymentVersion} release for ${currTag.commit.sha}`,
+    });
+
+    if (!deployment) {
+      await DeploymentModel.create({
+        repo_id: repository._id,
+        commit_id: commit._id,
+        environment: "prod",
+        name: `PROD/${release.deploymentVersion} release for ${currTag.commit.sha}`,
+        status: "success",
+        started_at: commit.created_at,
+        finished_at: release.timestamp,
+      });
+    }
+  } else {
+    const {
+      data: { commits },
+    } = await client.request(
+      "GET /repos/{owner}/{repo}/compare/{base}...{head}",
+      {
+        owner: repository.owner,
+        repo: repository.name,
+        base: prevTag.commit.sha,
+        head: currTag.commit.sha,
+      },
+    );
+
+    await Promise.all(
+      commits.map(async (commit) => {
+        try {
+          const cmt = await CommitModel.findOne({
+            sha: commit.sha,
+          });
+          if (!cmt) {
+            console.warn(`Commit not found: ${commit.sha}`);
+            return;
+          }
+
+          const deployment = await DeploymentModel.findOne({
+            repo_id: repository._id,
+            commit_id: cmt._id,
+            environment: "prod",
+            name: `PROD/${release.deploymentVersion} release for ${currTag.commit.sha}`,
+          });
+
+          if (!deployment) {
+            await DeploymentModel.create({
+              repo_id: repository._id,
+              commit_id: cmt._id,
+              environment: "prod",
+              name: `PROD/${release.deploymentVersion} release for ${commit.sha}`,
+              status: "success",
+              started_at: cmt.created_at,
+              finished_at: release.timestamp,
+            });
+          }
+        } catch (err) {
+          console.error(`Error processing commit ${commit.sha}:`, err);
+        }
+      }),
+    );
+  }
 };
 
-const scanDeploymentsFromGoogleDocs = async (
-  client: Octokit,
-  repository: Repository,
-  commits: Commit[],
-): Promise<void> => {
-  console.log("TO BE IMPLEMENTED");
+const parseDeployment = (deployment: string) => {
+  const [firstLine, ...restLines] = deployment.split("\n");
+  const deploymentVersion = firstLine.split(" ")[0];
+  const versionRegex =
+    /^v\d+\.\d+\.\d+\s\((\d{2})h(\d{2}),\s(\d{4}-\d{2}-\d{2})\)$/;
+  const match = firstLine.match(versionRegex);
+
+  if (!match) {
+    console.log("No version tag found at the start of the file.");
+    return null;
+  }
+
+  const versionIndex = restLines.indexOf("Version");
+  if (versionIndex === -1) {
+    console.warn(
+      `"Version" marker not found in deployment for ${deploymentVersion}.`,
+    );
+    return null;
+  }
+
+  const content = restLines.slice(0, versionIndex).join("\n");
+  const selectedRepositories = restLines.slice(versionIndex + 1);
+  const [_, hour, minute, date] = match;
+  const timestamp = new Date(`${date}T${hour}:${minute}:00Z`).toISOString();
+
+  return { deploymentVersion, content, selectedRepositories, timestamp };
 };
 
 const scanDevEnv = async (job: Job<{ repo_ref: string }>) => {
@@ -216,8 +327,9 @@ const scanDevEnv = async (job: Job<{ repo_ref: string }>) => {
   await job.updateProgress(100);
 };
 
-const scanProdEnv = async (job: Job<{}>) => {
-  const deployments = await GoogleDocumentClient.readDocs(env.PROD_DOC_ID);
+const scanProdEnv = async (job: Job<{ doc_id: string }>) => {
+  const { doc_id } = job.data;
+  const deployments = await GoogleDocumentClient.readDocs(doc_id);
 
   if (!deployments || deployments.length === 0) {
     throw new Error(
@@ -226,31 +338,14 @@ const scanProdEnv = async (job: Job<{}>) => {
   }
 
   const promises = deployments.map(async (deployment) => {
-    const [firstLine, ...restLines] = deployment.split("\n");
+    const parsed = parseDeployment(deployment);
 
-    const currentVersion = firstLine.split(" ")[0];
-    const versionRegex =
-      /^v\d+\.\d+\.\d+\s\((\d{2})h(\d{2}),\s(\d{4}-\d{2}-\d{2})\)$/; // e.g., v1.0.1 (14h50, 2024-12-04)
-    const match = firstLine.match(versionRegex);
-
-    if (!match) {
-      console.log("No version tag found at the start of the file.");
+    if (!parsed) {
       return;
     }
 
-    const versionIndex = restLines.indexOf("Version");
-    if (versionIndex === -1) {
-      console.warn(
-        `"Version" marker not found in deployment for ${currentVersion}.`,
-      );
-      return;
-    }
-
-    const content = restLines.slice(0, versionIndex).join("\n");
-    const selectedRepositories = restLines.slice(versionIndex + 1);
-
-    const [_, hour, minute, date] = match;
-    const timestamp = new Date(`${date}T${hour}:${minute}:00Z`).toISOString();
+    const { deploymentVersion, content, selectedRepositories, timestamp } =
+      parsed;
 
     const releaseRegex =
       /github\.com\/([^/]+)\/([^/]+)\/releases\/tag\/([^/]+)/;
@@ -270,106 +365,29 @@ const scanProdEnv = async (job: Job<{}>) => {
             name: repo,
           });
 
-          if (!repository) {
-            return;
-          }
-
-          const tags = await octokit.paginate(
-            "GET /repos/{owner}/{repo}/tags",
-            {
-              owner,
-              repo,
-            },
-          );
-
-          const currTagIdx = tags.findIndex((tag) => tag.name === tagName);
-          if (currTagIdx === -1) {
-            console.warn(`Current tag (${tagName}) not found for ${repo}.`);
-            return;
-          }
-
-          const currTag = tags[currTagIdx];
-          const prevTag = tags[currTagIdx + 1]; // Get the previous tag if it exists
-
-          if (!currTag) {
-            console.warn(`Current tag not found for ${repo}.`);
-            return;
-          }
-
-          if (!prevTag) {
-            // Handle single tag scenario
-            const commit = await CommitModel.findOne({
-              sha: currTag.commit.sha,
-            });
-            if (!commit) {
-              console.warn(`Commit not found: ${currTag.commit.sha}`);
-              return;
-            }
-            await DeploymentModel.create({
-              repo_id: repository._id,
-              commit_id: commit._id,
-              environment: "prod",
-              name: `PROD/${currentVersion} release for ${currTag.commit.sha}`,
-              status: "success",
-              started_at: commit.created_at,
-              finished_at: timestamp,
-            });
-          } else {
-            // Compare current and previous tags
-            const {
-              data: { commits },
-            } = await octokit.request(
-              "GET /repos/{owner}/{repo}/compare/{base}...{head}",
-              {
-                owner,
-                repo,
-                base: prevTag.commit.sha,
-                head: currTag.commit.sha,
-              },
-            );
-
-            // Process commits in comparison
-            await Promise.all(
-              commits.map(async (commit) => {
-                try {
-                  const cmt = await CommitModel.findOne({
-                    sha: commit.sha,
-                  });
-                  if (!cmt) {
-                    console.warn(`Commit not found: ${commit.sha}`);
-                    return;
-                  }
-                  await DeploymentModel.create({
-                    repo_id: repository._id,
-                    commit_id: cmt._id,
-                    environment: "prod",
-                    name: `PROD/${currentVersion} release for ${commit.sha}`,
-                    status: "success",
-                    started_at: cmt.created_at,
-                    finished_at: timestamp,
-                  });
-                } catch (err) {
-                  console.error(`Error processing commit ${commit.sha}:`, err);
-                }
-              }),
-            );
+          if (repository) {
+            const releaseInfo = {
+              tagName,
+              deploymentVersion,
+              timestamp,
+            };
+            await scanReleasesFromDocs(octokit, repository, releaseInfo);
           }
         } catch (err) {
-          console.error(`Error processing release ${release}:`, err);
+          console.error(`Error processing release: ${release}`, err);
         }
       }),
     );
   });
 
-  await Promise.all(promises);
+  await Promise.all([...promises, job.updateProgress(100)]);
 };
 
 const TaskController = {
   scanRepository,
   scanCommits,
   scanWorkflows,
-  scanReleases,
-  scanDeploymentsFromGoogleDocs,
+  scanReleasesFromDocs,
   scanDevEnv,
   scanProdEnv,
 };
