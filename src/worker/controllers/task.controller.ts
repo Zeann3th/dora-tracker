@@ -209,7 +209,7 @@ const scanReleasesFromDocs = async (
       repo_id: repository._id,
       commit_id: commit._id,
       environment: "prod",
-      name: `PROD/${release.deploymentVersion} release for ${currTag.commit.sha}`,
+      name: `PROD/${release.deploymentVersion}`,
     });
 
     if (!deployment) {
@@ -217,7 +217,7 @@ const scanReleasesFromDocs = async (
         repo_id: repository._id,
         commit_id: commit._id,
         environment: "prod",
-        name: `PROD/${release.deploymentVersion} release for ${currTag.commit.sha}`,
+        name: `PROD/${release.deploymentVersion}`,
         status: "success",
         started_at: commit.created_at,
         finished_at: release.timestamp,
@@ -251,7 +251,7 @@ const scanReleasesFromDocs = async (
             repo_id: repository._id,
             commit_id: cmt._id,
             environment: "prod",
-            name: `PROD/${release.deploymentVersion} release for ${currTag.commit.sha}`,
+            name: `PROD/${release.deploymentVersion}`,
           });
 
           if (!deployment) {
@@ -259,7 +259,7 @@ const scanReleasesFromDocs = async (
               repo_id: repository._id,
               commit_id: cmt._id,
               environment: "prod",
-              name: `PROD/${release.deploymentVersion} release for ${commit.sha}`,
+              name: `PROD/${release.deploymentVersion}`,
               status: "success",
               started_at: cmt.created_at,
               finished_at: release.timestamp,
