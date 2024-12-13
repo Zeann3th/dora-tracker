@@ -118,7 +118,9 @@ const createCommit = async (req: Request, res: Response) => {
       repo_id: repository._id,
       sha: payload.pull_request.merge_commit_sha,
       created_at: payload.pull_request.merged_at,
-      commit_message: payload.pull_request.merge_commit_message,
+      commit_message:
+        payload.pull_request.merge_commit_message ||
+        payload.pull_request.merge_commit_title,
       author: payload.pull_request.merged_by.name,
     });
 

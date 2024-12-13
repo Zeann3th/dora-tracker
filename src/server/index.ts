@@ -14,8 +14,6 @@ export const startServer = async (): Promise<Server> => {
 
   const app = express();
 
-  app.set("trust proxy", "127.0.0.1");
-
   // Content-Type
   app.use(express.json());
 
