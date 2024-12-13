@@ -1,12 +1,11 @@
 import env from "@/env";
+import octokit from "@/services/octokit";
 import queue from "@/services/queue";
 import { Octokit } from "@octokit/rest";
 import { Job } from "bullmq";
 import { Request, RequestHandler, Response } from "express";
 
 const queueJob: RequestHandler = async (req: Request, res: Response) => {
-  const octokit = new Octokit({ auth: env.GH_PAT });
-
   const repos = await octokit.paginate("GET /orgs/{org}/repos", {
     org: env.GH_ORG_NAME,
   });
@@ -15,7 +14,7 @@ const queueJob: RequestHandler = async (req: Request, res: Response) => {
     return queue.add("dev", { repo_ref: repo.full_name });
   });
 
-  const prodPromises = queue.add("prod", {});
+  const prodPromises = queue.add("prod", { doc_id: env.PROD_DOC_ID });
 
   const jobs = await Promise.all([...devPromises, prodPromises]);
 
