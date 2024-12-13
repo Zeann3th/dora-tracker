@@ -31,6 +31,7 @@ export interface PullRequest {
       email: string;
     };
     merge_commit_message: string;
+    merge_commit_title: string;
   };
 }
 
