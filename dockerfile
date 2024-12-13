@@ -18,6 +18,7 @@ WORKDIR /app
 
 COPY --from=build /app/bin ./bin
 COPY --from=build /app/public ./public
+COPY --from=build /app/google.json ./google.json
 COPY package*.json ./
 
 RUN npm install --only=production
