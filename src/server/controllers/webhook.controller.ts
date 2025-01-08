@@ -121,7 +121,7 @@ const createCommit = async (req: Request, res: Response) => {
       commit_message:
         payload.pull_request.merge_commit_message ||
         payload.pull_request.merge_commit_title,
-      author: payload.pull_request.merged_by.login,
+      author: payload.pull_request.merged_by.name, // try login -> name
     });
 
     res.status(200).json({
@@ -253,20 +253,22 @@ const handleGoogleWebhook: RequestHandler = async (
         const [owner, repo, tagName] = match.slice(1);
         const repository = await findRepository(owner, repo);
 
-        // Fetch the latest 5 tags
+        // Fetch the latest 20 tags
         const tags = await octokit.paginate("GET /repos/{owner}/{repo}/tags", {
           owner,
           repo,
-          per_page: 2,
+          per_page: 20, // magic number? nah
         });
 
-        const currTag = tags[0];
-        const prevTag = tags.length > 1 ? tags[1] : undefined;
+        const currIdx = tags.findIndex((tag) => tag.name === tagName); // fixed logic instead of 2 latest tags
 
-        if (!currTag) {
+        if (currIdx === -1) {
           console.warn(`Current tag not found for ${repo}.`);
           return;
         }
+
+        const currTag = tags[currIdx];
+        const prevTag = tags[currIdx + 1];
 
         if (!prevTag) {
           // Create deployment only for the head commit (currTag)
