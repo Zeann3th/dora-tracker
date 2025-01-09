@@ -360,7 +360,7 @@ const scanUatProdEnv = async (job: Job) => {
   }
 
   const promises = deployments.map(async (deployment) => {
-    const parsed = parseDeployment(deployment, "prod");
+    const parsed = parseDeployment(deployment, environment);
 
     if (!parsed) {
       return;
