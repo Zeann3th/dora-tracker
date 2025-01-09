@@ -26,6 +26,9 @@ const repositorySchema = new Schema({
       return `${this.owner}/${this.name}`;
     },
   },
+  last_scanned_at: {
+    type: Date,
+  },
 });
 
 export type Repository = InferSchemaType<typeof repositorySchema> & {
