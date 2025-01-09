@@ -28,12 +28,6 @@ export const startServer = async (): Promise<Server> => {
   // Routes
   app.use("/api", limiter, apiRoutes);
 
-  app.use(express.static(path.join(import.meta.dirname, "../../public")));
-
-  app.get("/", (req, res) => {
-    res.sendFile(path.join(import.meta.dirname, "../../public/index.html"));
-  });
-
   const port = env.PORT || 5000;
   return new Promise<Server>((resolve) => {
     const server = app.listen(port, () => {

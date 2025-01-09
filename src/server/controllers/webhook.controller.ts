@@ -17,6 +17,7 @@ import {
   RepositoryModel,
 } from "@/models";
 import octokit from "@/services/octokit";
+import { GH_RELEASE_REG_EXP } from "@/utils";
 
 const handleGithubWebhook: RequestHandler = async (
   req: Request,
@@ -42,6 +43,9 @@ const handleGithubWebhook: RequestHandler = async (
   }
 
   switch (event) {
+    case "push":
+      // TO BE IMPLEMENTED
+      break;
     case "pull_request":
       await createCommit(req, res);
       break;
@@ -68,6 +72,7 @@ const handleRepository = async (req: Request, res: Response) => {
     switch (payload.action) {
       case "created":
         await RepositoryModel.create({
+          gh_id: payload.repository.id,
           owner,
           name,
           private: payload.repository.private,
@@ -121,7 +126,7 @@ const createCommit = async (req: Request, res: Response) => {
       commit_message:
         payload.pull_request.merge_commit_message ||
         payload.pull_request.merge_commit_title,
-      author: payload.pull_request.merged_by.name, // try login -> name
+      author: payload.pull_request.merged_by.name, // mismatch in author...
     });
 
     res.status(200).json({
@@ -239,12 +244,9 @@ const handleGoogleWebhook: RequestHandler = async (
     const payload = req.body as GoogleDocsUpdate;
     console.log(payload);
 
-    const releaseRegex =
-      /github\.com\/([^/]+)\/([^/]+)\/releases\/tag\/([^/]+)/;
-
     const versionPromises = payload.target.map(async (release) => {
       try {
-        const match = release.match(releaseRegex);
+        const match = release.match(GH_RELEASE_REG_EXP);
         if (!match) {
           console.warn(`No match for release: ${release}`);
           return;
@@ -253,14 +255,24 @@ const handleGoogleWebhook: RequestHandler = async (
         const [owner, repo, tagName] = match.slice(1);
         const repository = await findRepository(owner, repo);
 
-        // Fetch the latest 20 tags
+        // Fetch the latest 10 tags
         const tags = await octokit.paginate("GET /repos/{owner}/{repo}/tags", {
           owner,
           repo,
-          per_page: 20, // magic number? nah
+          per_page: 10, // magic number
         });
 
-        const currIdx = tags.findIndex((tag) => tag.name === tagName); // fixed logic instead of 2 latest tags
+        const currIdx = tags.findIndex((tag) => tag.name === tagName);
+        const {
+          data: { created_at: tagCreationDate },
+        } = await octokit.request(
+          "GET /repos/{owner}/{repo}/releases/tags/{tag}",
+          {
+            owner,
+            repo,
+            tag: tagName,
+          },
+        );
 
         if (currIdx === -1) {
           console.warn(`Current tag not found for ${repo}.`);
@@ -286,7 +298,10 @@ const handleGoogleWebhook: RequestHandler = async (
             name: `${payload.environment.toUpperCase()}/${payload.version}`,
             status: "success",
             started_at: cmt.created_at,
-            finished_at: payload.timestamp,
+            finished_at:
+              payload.environment === "prod"
+                ? payload.timestamp
+                : tagCreationDate,
           });
         } else {
           // Compare currTag and prevTag commits
@@ -319,7 +334,10 @@ const handleGoogleWebhook: RequestHandler = async (
                 name: `${payload.environment.toUpperCase()}/${payload.version}`,
                 status: "success",
                 started_at: cmt.created_at,
-                finished_at: payload.timestamp,
+                finished_at:
+                  payload.environment === "prod"
+                    ? payload.timestamp
+                    : tagCreationDate,
               });
             } catch (err) {
               console.error(`Error processing commit ${commit.sha}:`, err);

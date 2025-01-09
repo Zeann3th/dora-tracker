@@ -18,9 +18,8 @@ export const startWorker = async (): Promise<Worker> => {
               await TaskController.scanDevEnv(job);
               break;
             case "uat":
-              break;
             case "prod":
-              await TaskController.scanProdEnv(job);
+              await TaskController.scanUatProdEnv(job);
               break;
             default:
               console.log(`[Worker]: Unhandled job name: ${job.name}`);
