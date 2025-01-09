@@ -1,6 +1,10 @@
 import mongoose, { InferSchemaType, model, Schema } from "mongoose";
 
 const commitSchema = new Schema({
+  gh_id: {
+    // Unfortunately, webhook does not send the id
+    type: String,
+  },
   sha: {
     type: String,
     required: true,

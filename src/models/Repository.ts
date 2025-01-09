@@ -1,6 +1,9 @@
 import mongoose, { InferSchemaType, model, Schema } from "mongoose";
 
 const repositorySchema = new Schema({
+  gh_id: {
+    type: Number,
+  },
   owner: {
     type: String,
     required: true,

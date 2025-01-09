@@ -8,6 +8,7 @@ import {
 } from "@/models";
 import { GoogleDocumentClient } from "@/services/google";
 import octokit from "@/services/octokit";
+import { GH_RELEASE_REG_EXP, PROD_REG_EXP, UAT_REG_EXP } from "@/utils";
 import { Octokit } from "@octokit/rest";
 import { Job } from "bullmq";
 
@@ -26,6 +27,7 @@ const scanRepository = async (
       repo: name,
     });
     repository = await RepositoryModel.create({
+      gh_id: data.id,
       name,
       owner,
       private: data.private,
@@ -170,10 +172,11 @@ const scanWorkflows = async (
   }
 };
 
-const scanReleasesFromDocs = async (
+const scanReleases = async (
   client: Octokit,
   repository: Repository,
   release: {
+    environment: "uat" | "prod";
     tagName: string;
     timestamp: string;
     deploymentVersion: string;
@@ -185,6 +188,13 @@ const scanReleasesFromDocs = async (
   });
 
   const currTagIdx = tags.findIndex((tag) => tag.name === release.tagName);
+  const {
+    data: { created_at: tagCreationDate },
+  } = await client.request("GET /repos/{owner}/{repo}/releases/tags/{tag}", {
+    owner: repository.owner,
+    repo: repository.name,
+    tag: release.tagName,
+  });
 
   if (currTagIdx === -1) {
     console.warn(
@@ -208,19 +218,20 @@ const scanReleasesFromDocs = async (
     const deployment = await DeploymentModel.findOne({
       repo_id: repository._id,
       commit_id: commit._id,
-      environment: "prod",
-      name: `PROD/${release.deploymentVersion}`,
+      environment: release.environment,
+      name: `${release.environment.toUpperCase()}/${release.deploymentVersion}`,
     });
 
     if (!deployment) {
       await DeploymentModel.create({
         repo_id: repository._id,
         commit_id: commit._id,
-        environment: "prod",
-        name: `PROD/${release.deploymentVersion}`,
+        environment: release.environment,
+        name: `${release.environment.toUpperCase()}/${release.deploymentVersion}`,
         status: "success",
         started_at: commit.created_at,
-        finished_at: release.timestamp,
+        finished_at:
+          release.environment === "prod" ? release.timestamp : tagCreationDate,
       });
     }
   } else {
@@ -250,19 +261,22 @@ const scanReleasesFromDocs = async (
           const deployment = await DeploymentModel.findOne({
             repo_id: repository._id,
             commit_id: cmt._id,
-            environment: "prod",
-            name: `PROD/${release.deploymentVersion}`,
+            environment: release.environment,
+            name: `${release.environment.toUpperCase()}/${release.deploymentVersion}`,
           });
 
           if (!deployment) {
             await DeploymentModel.create({
               repo_id: repository._id,
               commit_id: cmt._id,
-              environment: "prod",
-              name: `PROD/${release.deploymentVersion}`,
+              environment: release.environment,
+              name: `${release.environment.toUpperCase()}/${release.deploymentVersion}`,
               status: "success",
               started_at: cmt.created_at,
-              finished_at: release.timestamp,
+              finished_at:
+                release.environment === "prod"
+                  ? release.timestamp
+                  : tagCreationDate,
             });
           }
         } catch (err) {
@@ -273,11 +287,10 @@ const scanReleasesFromDocs = async (
   }
 };
 
-const parseDeployment = (deployment: string) => {
+const parseDeployment = (deployment: string, environment: "uat" | "prod") => {
   const [firstLine, ...restLines] = deployment.split("\n");
   const deploymentVersion = firstLine.split(" ")[0];
-  const versionRegex =
-    /^v\d+\.\d+\.\d+\s\((\d{2})h(\d{2}),\s(\d{4}-\d{2}-\d{2})\)$/;
+  const versionRegex = environment === "prod" ? PROD_REG_EXP : UAT_REG_EXP;
   const match = firstLine.match(versionRegex);
 
   if (!match) {
@@ -294,7 +307,7 @@ const parseDeployment = (deployment: string) => {
   }
 
   const content = restLines.slice(0, versionIndex).join("\n");
-  const selectedRepositories = restLines.slice(versionIndex + 1);
+  const selectedRepositories = restLines.slice(versionIndex + 1); // Why.. Just why, now i need to stop version from overflowing to other content
   const [_, hour, minute, date] = match;
   const timestamp = new Date(`${date}T${hour}:${minute}:00Z`).toISOString();
 
@@ -327,9 +340,15 @@ const scanDevEnv = async (job: Job<{ repo_ref: string }>) => {
   await job.updateProgress(100);
 };
 
-const scanProdEnv = async (job: Job<{ doc_id: string }>) => {
+const scanUatProdEnv = async (job: Job) => {
   const { doc_id } = job.data;
-  const deployments = await GoogleDocumentClient.readDocs(doc_id);
+  let environment: "uat" | "prod";
+  if (job.name === "uat" || job.name === "prod") {
+    environment = job.name;
+  } else {
+    throw new Error("[Worker]: Invalid job name!, must be 'uat' or 'prod'");
+  }
+  const deployments = await GoogleDocumentClient.read(doc_id, environment);
 
   if (!deployments || deployments.length === 0) {
     throw new Error(
@@ -338,7 +357,7 @@ const scanProdEnv = async (job: Job<{ doc_id: string }>) => {
   }
 
   const promises = deployments.map(async (deployment) => {
-    const parsed = parseDeployment(deployment);
+    const parsed = parseDeployment(deployment, "prod");
 
     if (!parsed) {
       return;
@@ -347,13 +366,10 @@ const scanProdEnv = async (job: Job<{ doc_id: string }>) => {
     const { deploymentVersion, content, selectedRepositories, timestamp } =
       parsed;
 
-    const releaseRegex =
-      /github\.com\/([^/]+)\/([^/]+)\/releases\/tag\/([^/]+)/;
-
     await Promise.all(
       selectedRepositories.map(async (release) => {
         try {
-          const match = release.match(releaseRegex);
+          const match = release.match(GH_RELEASE_REG_EXP);
           if (!match) {
             console.warn(`No match for release: ${release}`);
             return;
@@ -366,12 +382,12 @@ const scanProdEnv = async (job: Job<{ doc_id: string }>) => {
           });
 
           if (repository) {
-            const releaseInfo = {
+            await scanReleases(octokit, repository, {
+              environment,
               tagName,
               deploymentVersion,
               timestamp,
-            };
-            await scanReleasesFromDocs(octokit, repository, releaseInfo);
+            });
           }
         } catch (err) {
           console.error(`Error processing release: ${release}`, err);
@@ -384,12 +400,8 @@ const scanProdEnv = async (job: Job<{ doc_id: string }>) => {
 };
 
 const TaskController = {
-  scanRepository,
-  scanCommits,
-  scanWorkflows,
-  scanReleasesFromDocs,
   scanDevEnv,
-  scanProdEnv,
+  scanUatProdEnv,
 };
 
 export { TaskController };

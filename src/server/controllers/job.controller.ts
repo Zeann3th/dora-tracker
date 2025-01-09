@@ -14,9 +14,11 @@ const queueJob: RequestHandler = async (req: Request, res: Response) => {
     return queue.add("dev", { repo_ref: repo.full_name });
   });
 
+  const uatPromises = queue.add("uat", { doc_id: env.UAT_DOC_ID });
+
   const prodPromises = queue.add("prod", { doc_id: env.PROD_DOC_ID });
 
-  const jobs = await Promise.all([...devPromises, prodPromises]);
+  const jobs = await Promise.all([...devPromises, uatPromises, prodPromises]);
 
   res.status(202).json({
     message: `Jobs are being processed, id range: [${jobs[0].id}; ${jobs[jobs.length - 1].id}]`,
