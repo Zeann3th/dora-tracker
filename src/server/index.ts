@@ -26,6 +26,9 @@ export const startServer = async (): Promise<Server> => {
   app.use(morgan(":method :url :status - :response-time ms"));
 
   // Routes
+  app.get("/", (req, res) => {
+    res.status(200).json({});
+  });
   app.use("/api", limiter, apiRoutes);
 
   const port = env.PORT || 5000;
