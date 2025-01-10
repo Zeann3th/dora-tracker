@@ -17,7 +17,6 @@ FROM node:20-alpine AS production
 WORKDIR /app
 
 COPY --from=build /app/bin ./bin
-COPY --from=build /app/public ./public
 COPY --from=build /app/google.json ./google.json
 COPY package*.json ./
 
