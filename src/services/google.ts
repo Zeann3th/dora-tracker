@@ -15,7 +15,7 @@ class GoogleAPIClient {
 
   public async read(
     documentId: string,
-    environment: "uat" | "prod",
+    environment: string
   ): Promise<string[] | undefined> {
     try {
       const docs = google.docs({ version: "v1", auth: this.auth });
@@ -28,9 +28,32 @@ class GoogleAPIClient {
     }
   }
 
+  public async readUat(documentId: string): Promise<string[] | undefined> {
+    try {
+      const docs = google.docs({ version: "v1", auth: this.auth });
+      const content = await docs.documents.get({ documentId });
+      const delimiter = UAT_REG_EXP;
+      return this.extractTextByBlock(content.data.body?.content, delimiter);
+    } catch (error) {
+      console.error("Error reading document:", error);
+      return undefined;
+    }
+  }
+
+  public async readProd(documentId: string): Promise<string[] | undefined> {
+    try {
+      const docs = google.docs({ version: "v1", auth: this.auth });
+      const content = await docs.documents.get({ documentId });
+      const delimiter = PROD_REG_EXP;
+      return this.extractTextByBlock(content.data.body?.content, delimiter);
+    } catch (error) {
+      console.error("Error reading document:", error);
+      return undefined;
+    }
+  }
   private extractTextByBlock(
     content: docs_v1.Schema$StructuralElement[] | undefined,
-    regexDelimiter: RegExp,
+    regexDelimiter: RegExp
   ): string[] {
     const blocks: string[] = [];
 
