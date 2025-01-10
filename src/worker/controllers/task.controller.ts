@@ -34,6 +34,8 @@ const scanRepository = async (
       default_branch: data.default_branch,
     });
   }
+  repository.last_scanned_at = new Date();
+  await repository.save();
   return repository;
 };
 
@@ -45,6 +47,7 @@ const scanCommits = async (
     owner: repository.owner,
     repo: repository.name,
     sha: repository.default_branch,
+    since: repository.last_scanned_at?.toISOString(),
   });
 
   const commitPromises = commits.map(async (commit) => {
@@ -318,8 +321,8 @@ const scanDevEnv = async (job: Job<{ repo_ref: string }>) => {
   const { repo_ref } = job.data;
 
   console.log("Scanning for repository...");
-  // Extract owner and repository name from link
-  // e.g: https://github.com/mui/material-ui => owner: mui, repo: material-ui
+  // Extract owner and repository name from ref
+  // e.g: mui/material-ui => owner: mui, repo: material-ui
   const [owner, repo] = repo_ref.split("/");
 
   // Checks for repository on database, if doesn't exist, create a new repository document
@@ -357,7 +360,7 @@ const scanUatProdEnv = async (job: Job) => {
   }
 
   const promises = deployments.map(async (deployment) => {
-    const parsed = parseDeployment(deployment, "prod");
+    const parsed = parseDeployment(deployment, environment);
 
     if (!parsed) {
       return;
