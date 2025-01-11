@@ -10,9 +10,9 @@ const queueJob: RequestHandler = async (req: Request, res: Response) => {
     org: env.GH_ORG_NAME,
   });
 
-  const devPromises = repos.map(async (repo) => {
-    return queue.add("dev", { repo_ref: repo.full_name });
-  });
+  const devPromises = repos.map((repo) =>
+    queue.add("dev", { repo_ref: repo.full_name }),
+  );
 
   const uatPromises = queue.add("uat", { doc_id: env.UAT_DOC_ID });
 

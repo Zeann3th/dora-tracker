@@ -1,4 +1,4 @@
-import mongoose, { InferSchemaType, model, Schema } from "mongoose";
+import mongoose, { Document, InferSchemaType, model, Schema } from "mongoose";
 
 const repositorySchema = new Schema({
   gh_id: {
@@ -31,9 +31,7 @@ const repositorySchema = new Schema({
   },
 });
 
-export type Repository = InferSchemaType<typeof repositorySchema> & {
-  _id: mongoose.Schema.Types.ObjectId;
-};
+export type Repository = InferSchemaType<typeof repositorySchema> & Document;
 
 export const RepositoryModel = model<Repository>(
   "Repository",

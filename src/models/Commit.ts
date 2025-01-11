@@ -1,4 +1,4 @@
-import mongoose, { InferSchemaType, model, Schema } from "mongoose";
+import mongoose, { Document, InferSchemaType, model, Schema } from "mongoose";
 
 const commitSchema = new Schema({
   gh_id: {
@@ -22,8 +22,6 @@ const commitSchema = new Schema({
   author: String,
 });
 
-export type Commit = InferSchemaType<typeof commitSchema> & {
-  _id: mongoose.Schema.Types.ObjectId;
-};
+export type Commit = InferSchemaType<typeof commitSchema> & Document;
 
 export const CommitModel = model<Commit>("Commit", commitSchema);
