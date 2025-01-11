@@ -191,13 +191,19 @@ const scanReleases = async (
   });
 
   const currTagIdx = tags.findIndex((tag) => tag.name === release.tagName);
-  const {
-    data: { created_at: tagCreationDate },
-  } = await client.request("GET /repos/{owner}/{repo}/releases/tags/{tag}", {
-    owner: repository.owner,
-    repo: repository.name,
-    tag: release.tagName,
-  });
+
+  let releaseDate: string = release.timestamp;
+  if (release.environment === "uat") {
+    const { data } = await client.request(
+      "GET /repos/{owner}/{repo}/releases/tags/{tag}",
+      {
+        owner: repository.owner,
+        repo: repository.name,
+        tag: release.tagName,
+      },
+    );
+    releaseDate = data.created_at;
+  }
 
   if (currTagIdx === -1) {
     console.warn(
@@ -233,8 +239,7 @@ const scanReleases = async (
         name: `${release.environment.toUpperCase()}/${release.deploymentVersion}`,
         status: "success",
         started_at: commit.created_at,
-        finished_at:
-          release.environment === "prod" ? release.timestamp : tagCreationDate,
+        finished_at: releaseDate,
       });
     }
   } else {
@@ -276,10 +281,7 @@ const scanReleases = async (
               name: `${release.environment.toUpperCase()}/${release.deploymentVersion}`,
               status: "success",
               started_at: cmt.created_at,
-              finished_at:
-                release.environment === "prod"
-                  ? release.timestamp
-                  : tagCreationDate,
+              finished_at: releaseDate,
             });
           }
         } catch (err) {
@@ -343,15 +345,10 @@ const scanDevEnv = async (job: Job<{ repo_ref: string }>) => {
   await job.updateProgress(100);
 };
 
-const scanUatProdEnv = async (job: Job) => {
+const scanUatEnv = async (job: Job) => {
   const { doc_id } = job.data;
-  let environment: "uat" | "prod";
-  if (job.name === "uat" || job.name === "prod") {
-    environment = job.name;
-  } else {
-    throw new Error("[Worker]: Invalid job name!, must be 'uat' or 'prod'");
-  }
-  const deployments = await GoogleDocumentClient.read(doc_id, environment);
+
+  const deployments = await GoogleDocumentClient.read(doc_id, "uat");
 
   if (!deployments || deployments.length === 0) {
     throw new Error(
@@ -360,7 +357,7 @@ const scanUatProdEnv = async (job: Job) => {
   }
 
   const promises = deployments.map(async (deployment) => {
-    const parsed = parseDeployment(deployment, environment);
+    const parsed = parseDeployment(deployment, "uat");
 
     if (!parsed) {
       return;
@@ -386,7 +383,60 @@ const scanUatProdEnv = async (job: Job) => {
 
           if (repository) {
             await scanReleases(octokit, repository, {
-              environment,
+              environment: "uat",
+              tagName,
+              deploymentVersion,
+              timestamp,
+            });
+          }
+        } catch (err) {
+          console.error(`Error processing release: ${release}`, err);
+        }
+      }),
+    );
+  });
+
+  await Promise.all([...promises, job.updateProgress(100)]);
+};
+
+const scanProdEnv = async (job: Job) => {
+  const { doc_id } = job.data;
+  const deployments = await GoogleDocumentClient.read(doc_id, "prod");
+
+  if (!deployments || deployments.length === 0) {
+    throw new Error(
+      "This document is either empty or worker failed to fetch the document",
+    );
+  }
+
+  const promises = deployments.map(async (deployment) => {
+    const parsed = parseDeployment(deployment, "prod");
+
+    if (!parsed) {
+      return;
+    }
+
+    const { deploymentVersion, content, selectedRepositories, timestamp } =
+      parsed;
+
+    await Promise.all(
+      selectedRepositories.map(async (release) => {
+        try {
+          const match = release.match(GH_RELEASE_REG_EXP);
+          if (!match) {
+            console.warn(`No match for release: ${release}`);
+            return;
+          }
+
+          const [owner, repo, tagName] = match.slice(1);
+          let repository = await RepositoryModel.findOne({
+            owner: owner,
+            name: repo,
+          });
+
+          if (repository) {
+            await scanReleases(octokit, repository, {
+              environment: "prod",
               tagName,
               deploymentVersion,
               timestamp,
@@ -404,7 +454,8 @@ const scanUatProdEnv = async (job: Job) => {
 
 const TaskController = {
   scanDevEnv,
-  scanUatProdEnv,
+  scanUatEnv,
+  scanProdEnv,
 };
 
 export { TaskController };

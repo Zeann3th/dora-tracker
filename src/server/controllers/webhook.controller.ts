@@ -263,16 +263,20 @@ const handleGoogleWebhook: RequestHandler = async (
         });
 
         const currIdx = tags.findIndex((tag) => tag.name === tagName);
-        const {
-          data: { created_at: tagCreationDate },
-        } = await octokit.request(
-          "GET /repos/{owner}/{repo}/releases/tags/{tag}",
-          {
-            owner,
-            repo,
-            tag: tagName,
-          },
-        );
+
+        // Environment specifics... should be fine, changing is going to be hard
+        let releaseDate: string = payload.timestamp;
+        if (payload.environment === "uat") {
+          const { data } = await octokit.request(
+            "GET /repos/{owner}/{repo}/releases/tags/{tag}",
+            {
+              owner,
+              repo,
+              tag: tagName,
+            },
+          );
+          releaseDate = data.created_at;
+        }
 
         if (currIdx === -1) {
           console.warn(`Current tag not found for ${repo}.`);
@@ -298,10 +302,7 @@ const handleGoogleWebhook: RequestHandler = async (
             name: `${payload.environment.toUpperCase()}/${payload.version}`,
             status: "success",
             started_at: cmt.created_at,
-            finished_at:
-              payload.environment === "prod"
-                ? payload.timestamp
-                : tagCreationDate,
+            finished_at: releaseDate,
           });
         } else {
           // Compare currTag and prevTag commits
@@ -334,10 +335,7 @@ const handleGoogleWebhook: RequestHandler = async (
                 name: `${payload.environment.toUpperCase()}/${payload.version}`,
                 status: "success",
                 started_at: cmt.created_at,
-                finished_at:
-                  payload.environment === "prod"
-                    ? payload.timestamp
-                    : tagCreationDate,
+                finished_at: releaseDate,
               });
             } catch (err) {
               console.error(`Error processing commit ${commit.sha}:`, err);
