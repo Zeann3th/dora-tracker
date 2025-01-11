@@ -2,8 +2,8 @@ import "dotenv/config";
 import env from "@/env";
 import { Job, Worker } from "bullmq";
 import mongoose from "mongoose";
-import { connectDB } from "@/services/mongoose";
 import { TaskController } from "./controllers/task.controller";
+import { connectDB } from "@/services/mongoose.service";
 
 export const startWorker = async (): Promise<Worker> => {
   return new Promise<Worker>(async (resolve, reject) => {

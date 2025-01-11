@@ -9,8 +9,9 @@ function onEdit(e) {
   const docId = doc.getId();
   const lastModifiedTime = new Date().toISOString();
 
+  // Regex to capture the version tag with time (15h00) and date (2025-01-08)
   const versionRegex =
-    /(v\d+\.\d+\.\d+\s\(\d{2}h\d{2},\s\d{4}-\d{2}-\d{2}\))/gm;
+    /([vV]?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?\s\(\d{2}h\d{2},\s\d{4}-\d{2}-\d{2}\))/gm;
   const blocks = body
     .split(versionRegex)
     .map((block) => block.trim())
@@ -24,8 +25,9 @@ function onEdit(e) {
   const lines = firstBlock.split("\n").map((line) => line.trim());
   const [firstLine, ...restLines] = lines;
 
+  // Check version tag with the time format "15h00"
   const versionRegexCheck =
-    /^v\d+\.\d+\.\d+\s\((\d{2})h(\d{2}),\s(\d{4}-\d{2}-\d{2})\)$/;
+    /^[vV]?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?\s\((\d{2})h(\d{2}),\s(\d{4}-\d{2}-\d{2})\)$/;
   const versionMatch = firstLine.match(versionRegexCheck);
   if (!versionMatch)
     return console.log("No version tag found at the start of the file.");
@@ -42,7 +44,12 @@ function onEdit(e) {
   const versionIndex = restLines.indexOf("Version");
   const content = restLines.slice(0, versionIndex).join("\n");
   const selectedRepositories = restLines.slice(versionIndex + 1);
-  const currentVersion = firstLine.split(" ")[0];
+
+  let currentVersion = firstLine.split(" ")[0];
+  if (!/^v/i.test(currentVersion)) {
+    currentVersion = "v" + currentVersion;
+  }
+
   console.log(currentVersion);
   console.log(selectedRepositories);
 

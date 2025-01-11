@@ -9,7 +9,8 @@ function onEdit(e) {
   const docId = doc.getId();
   const lastModifiedTime = new Date().toISOString();
 
-  const versionRegex = /(v\d+\.\d+\.\d+\s\(\d{4}-\d{2}-\d{2}\))/gm;
+  const versionRegex =
+    /([vV]?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?\s\(\d{4}-\d{2}-\d{2}\))/gm;
   const blocks = body
     .split(versionRegex)
     .map((block) => block.trim())
@@ -24,14 +25,18 @@ function onEdit(e) {
   const [firstLine, ...restLines] = lines;
 
   // Check version tag
-  const versionRegexCheck = /^v\d+\.\d+\.\d+\s\(\d{4}-\d{2}-\d{2}\)$/;
+  const versionRegexCheck =
+    /^[vV]?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?\s\(\d{4}-\d{2}-\d{2}\)$/;
   if (!versionRegexCheck.test(firstLine))
     return console.log("No version tag found at the start of the file.");
 
   const versionIndex = restLines.indexOf("Version");
   const content = restLines.slice(0, versionIndex).join("\n");
   const selectedRepositories = restLines.slice(versionIndex + 1);
-  const currentVersion = firstLine.split(" ")[0];
+  let currentVersion = firstLine.split(" ")[0];
+  if (!/^v/i.test(currentVersion)) {
+    currentVersion = "v" + currentVersion;
+  }
   console.log(currentVersion);
   console.log(selectedRepositories);
 
@@ -50,7 +55,7 @@ function onEdit(e) {
     target: selectedRepositories,
   });
 
-  // Update stored version
+  // // Update stored version
   scriptProperties.setProperty(docId, currentVersion);
 }
 

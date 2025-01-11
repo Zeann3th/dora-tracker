@@ -4,7 +4,7 @@ import path from "path";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import { connectDB } from "@/services/mongoose";
+import { connectDB } from "@/services/mongoose.service";
 import { Server } from "http";
 import { limiter } from "./middlewares/ratelimit";
 import { apiRoutes } from "./routes";
