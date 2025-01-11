@@ -3,7 +3,7 @@ import { GoogleAuth } from "google-auth-library";
 import { docs_v1, google } from "googleapis";
 import path from "path";
 
-class GoogleAPIClient {
+class GoogleClient {
   private readonly auth: GoogleAuth;
 
   constructor() {
@@ -21,6 +21,30 @@ class GoogleAPIClient {
       const docs = google.docs({ version: "v1", auth: this.auth });
       const content = await docs.documents.get({ documentId });
       const delimiter = environment === "prod" ? PROD_REG_EXP : UAT_REG_EXP;
+      return this.extractTextByBlock(content.data.body?.content, delimiter);
+    } catch (error) {
+      console.error("Error reading document:", error);
+      return undefined;
+    }
+  }
+
+  public async readUat(documentId: string): Promise<string[] | undefined> {
+    try {
+      const docs = google.docs({ version: "v1", auth: this.auth });
+      const content = await docs.documents.get({ documentId });
+      const delimiter = UAT_REG_EXP;
+      return this.extractTextByBlock(content.data.body?.content, delimiter);
+    } catch (error) {
+      console.error("Error reading document:", error);
+      return undefined;
+    }
+  }
+
+  public async readProd(documentId: string): Promise<string[] | undefined> {
+    try {
+      const docs = google.docs({ version: "v1", auth: this.auth });
+      const content = await docs.documents.get({ documentId });
+      const delimiter = PROD_REG_EXP;
       return this.extractTextByBlock(content.data.body?.content, delimiter);
     } catch (error) {
       console.error("Error reading document:", error);
@@ -65,13 +89,6 @@ class GoogleAPIClient {
   }
 }
 
-const GoogleDocumentClient = new GoogleAPIClient();
+const GoogleService = new GoogleClient();
 
-export { GoogleDocumentClient };
-
-console.log(
-  await GoogleDocumentClient.read(
-    "1lyZzJhhwGSU0uysgPjcF_-hCzfZ2nAcifOqrpMdpe5E",
-    "uat",
-  ),
-);
+export { GoogleService };

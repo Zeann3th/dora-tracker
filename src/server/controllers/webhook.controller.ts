@@ -2,22 +2,20 @@ import env from "@/env";
 import crypto from "node:crypto";
 import { Request, RequestHandler, Response } from "express";
 import {
-  GoogleDocsUpdate,
-  PullRequest,
-  Push,
-  Release,
-  GHRepository,
-  WorkflowRun,
-} from "./webhook.types";
-import {
   Commit,
   CommitModel,
   DeploymentModel,
   Repository,
   RepositoryModel,
 } from "@/models";
-import octokit from "@/services/octokit";
 import { GH_RELEASE_REG_EXP } from "@/utils";
+import {
+  GHRepository,
+  GoogleDocsUpdate,
+  PullRequest,
+  WorkflowRun,
+} from "../types/webhook.types";
+import octokit from "@/services/octokit.service";
 
 const handleGithubWebhook: RequestHandler = async (
   req: Request,

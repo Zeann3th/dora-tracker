@@ -1,6 +1,6 @@
 import env from "@/env";
-import octokit from "@/services/octokit";
-import queue from "@/services/queue";
+import octokit from "@/services/octokit.service";
+import queue from "@/services/queue.service";
 import { Octokit } from "@octokit/rest";
 import { Job } from "bullmq";
 import { Request, RequestHandler, Response } from "express";
