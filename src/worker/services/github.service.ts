@@ -304,13 +304,16 @@ const scanUatReleases = async (
 
   const currTagIdx = tags.findIndex((tag) => tag.name === release.tagName);
 
-  const {
-    data: { created_at: releaseDate },
-  } = await client.request("GET /repos/{owner}/{repo}/releases/tags/{tag}", {
-    owner: repository.owner,
-    repo: repository.name,
-    tag: release.tagName,
-  });
+  const { data } = await client.request(
+    "GET /repos/{owner}/{repo}/releases/tags/{tag}",
+    {
+      owner: repository.owner,
+      repo: repository.name,
+      tag: release.tagName,
+    },
+  );
+
+  const releaseDate = data.published_at ?? data.created_at;
 
   if (currTagIdx === -1) {
     console.warn(

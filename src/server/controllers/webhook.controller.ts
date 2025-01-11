@@ -273,7 +273,7 @@ const handleGoogleWebhook: RequestHandler = async (
               tag: tagName,
             },
           );
-          releaseDate = data.created_at;
+          releaseDate = data.published_at ?? data.created_at; // created_at is unfortunately = commit created_at, if needed, can fallback to payload.timestamp
         }
 
         if (currIdx === -1) {
