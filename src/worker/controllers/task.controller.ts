@@ -294,13 +294,33 @@ const scanReleases = async (
 
 const parseDeployment = (deployment: string, environment: "uat" | "prod") => {
   const [firstLine, ...restLines] = deployment.split("\n");
-  const deploymentVersion = firstLine.split(" ")[0];
-  const versionRegex = environment === "prod" ? PROD_REG_EXP : UAT_REG_EXP;
-  const match = firstLine.match(versionRegex);
+  let deploymentVersion = firstLine.split(" ")[0];
 
-  if (!match) {
-    console.log("No version tag found at the start of the file.");
-    return null;
+  if (!/^v/i.test(deploymentVersion)) {
+    deploymentVersion = "v" + deploymentVersion;
+  }
+
+  let hour: string = "";
+  let minute: string = "";
+  let date: string = "";
+  if (environment === "uat") {
+    const match = firstLine.match(UAT_REG_EXP);
+
+    if (!match) {
+      console.log("No version tag found at the start of the file.");
+      return null;
+    }
+
+    date = match[1];
+  } else {
+    const match = firstLine.match(PROD_REG_EXP);
+
+    if (!match) {
+      console.log("No version tag found at the start of the file.");
+      return null;
+    }
+
+    [hour, minute, date] = [match[1], match[2], match[3]];
   }
 
   const versionIndex = restLines.indexOf("Version");
@@ -312,8 +332,7 @@ const parseDeployment = (deployment: string, environment: "uat" | "prod") => {
   }
 
   const content = restLines.slice(0, versionIndex).join("\n");
-  const selectedRepositories = restLines.slice(versionIndex + 1); // Why.. Just why, now i need to stop version from overflowing to other content
-  const [_, hour, minute, date] = match;
+  const selectedRepositories = restLines.slice(versionIndex + 1);
   const timestamp = new Date(`${date}T${hour}:${minute}:00Z`).toISOString();
 
   return { deploymentVersion, content, selectedRepositories, timestamp };

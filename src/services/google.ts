@@ -68,3 +68,10 @@ class GoogleAPIClient {
 const GoogleDocumentClient = new GoogleAPIClient();
 
 export { GoogleDocumentClient };
+
+console.log(
+  await GoogleDocumentClient.read(
+    "1lyZzJhhwGSU0uysgPjcF_-hCzfZ2nAcifOqrpMdpe5E",
+    "uat",
+  ),
+);
