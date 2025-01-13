@@ -34,7 +34,9 @@ const scanDevEnv = async (job: Job<{ repo_ref: string }>) => {
     }),
   ]);
 
-  await job.updateProgress(100);
+  repository.last_scanned_at = new Date();
+
+  await Promise.all([repository.save(), job.updateProgress(100)]);
 };
 
 const scanUatEnv = async (job: Job) => {

@@ -30,8 +30,6 @@ const scanRepository = async (
       default_branch: data.default_branch,
     });
   }
-  repository.last_scanned_at = new Date();
-  await repository.save();
   return repository;
 };
 
@@ -43,7 +41,9 @@ const scanCommits = async (
     owner: repository.owner,
     repo: repository.name,
     sha: repository.default_branch,
-    since: repository.last_scanned_at?.toISOString(),
+    ...(repository.last_scanned_at
+      ? { since: repository.last_scanned_at.toISOString() }
+      : {}),
   });
 
   const commitPromises = commits.map(async (commit) => {
