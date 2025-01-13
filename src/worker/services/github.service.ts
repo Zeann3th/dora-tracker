@@ -47,38 +47,33 @@ const scanCommits = async (
   });
 
   const commitPromises = commits.map(async (commit) => {
-    try {
-      // Check if commit exists
-      let cmt = await CommitModel.findOne({
+    // Check if commit exists
+    let cmt = await CommitModel.findOne({
+      repo_id: repository._id,
+      sha: commit.sha,
+    }).then();
+    // If not exist, create new
+    if (!cmt) {
+      const author = commit.commit.author?.name;
+      const commit_message = commit.commit.message;
+      const created_at = commit.commit.committer?.date;
+      // No Date = skip
+      if (!created_at) {
+        console.warn(
+          `Skipping commit ${commit.sha} due to missing required fields`,
+        );
+        return null;
+      }
+
+      cmt = await CommitModel.create({
         repo_id: repository._id,
         sha: commit.sha,
-      }).then();
-      // If not exist, create new
-      if (!cmt) {
-        const author = commit.commit.author?.name;
-        const commit_message = commit.commit.message;
-        const created_at = commit.commit.committer?.date;
-        // No Date = skip
-        if (!created_at) {
-          console.warn(
-            `Skipping commit ${commit.sha} due to missing required fields`,
-          );
-          return null;
-        }
-
-        cmt = await CommitModel.create({
-          repo_id: repository._id,
-          sha: commit.sha,
-          commit_message,
-          author,
-          created_at,
-        });
-      }
-      return cmt;
-    } catch (error) {
-      console.log(`Error processing commit ${commit.sha}: ${error}`);
-      return null;
+        commit_message,
+        author,
+        created_at,
+      });
     }
+    return cmt;
   });
 
   const processedCommits = await Promise.all(commitPromises);
